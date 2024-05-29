@@ -1,3 +1,0 @@
-"0","# Realizando Filtro"
-"0","department_stores_data <- aus_retail %>%"
-"0","  filter(Industry == ""Department stores"")"

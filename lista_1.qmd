@@ -12,6 +12,7 @@ Importando Pacotes utilizados neste documento.
 
 ```{r}
 library(fpp3)
+library(tseries)
 ```
 
 ## Importando Base de Dados
@@ -24,7 +25,7 @@ Abaixo esta listada todas as categorias presentes na base de dados:
 unique(aus_retail$Industry)
 ```
 
-Estes dados referem-se a lojas de departamentos, que são grandes estabelecimentos de varejo que oferem uma ampra variedade de mercadorias em diferentes seções ou departamentos dentro da mesma loja.
+Para realizar o trabalho iremos utilizar a categoria de "Department stores":
 
 ```{r}
 # Realizando Filtro
@@ -32,10 +33,90 @@ department_stores_data <- aus_retail %>%
   filter(Industry == "Department stores")
 ```
 
+Estes dados referem-se a lojas de departamentos, que são grandes estabelecimentos de varejo que oferem uma ampra variedade de mercadorias em diferentes seções ou departamentos dentro da mesma loja.
+
+## Pre-Precessamento
+
+Da forma que o dataframe está organizado, existem diferentes estados:
+
+```{r}
+unique(department_stores_data$State)
+```
+
+Para a resolução dos exercícios da lista, serão utilizados os dados da Austrália inteira, sendo necessária a seguinte transformação:
+
+```{r}
+department_stores_group <- department_stores_data %>%
+  index_by(Month) %>%
+  summarise(Turnover_total = sum(Turnover, na.rm = TRUE))
+```
+
+Com esta transformação, os dados são agrupados pela coluna "Month", somando os turnovers de todos os estados conforme essa coluna. O resultado final é a receita total de lojas de departamentos para toda a Austrália.
+
 ## Resolução:
 
 ### Questão 1
 
-Plote os gráficos da série e das ACF/PACF e discorra sobre o aspecto da série.
-Faça o teste de raíz unitária e explique as conclusões. Existe tendência
-estocástica?
+**Plote os gráficos da série e das ACF/PACF e discorra sobre o aspecto da série. Faça o teste de raíz unitária e explique as conclusões. Existe tendência estocástica?**
+
+O primeiro gráfico análisado será o Time Plot:
+
+```{r}
+department_stores_group %>%
+  autoplot(Turnover_total) +
+  labs(y="Turnover", title="Australian Department Stores Turnover")
+```
+
+O gráfico plotado acima demonstra um aparente padrão sazonal na série, com um pico de receita que se repete ao longo dos anos. Além disso, parece haver uma tendência de aumento de receita ao longo da série.
+
+Outro gráfico analisado será o Seasonal Plot:
+
+```{r}
+department_stores_group %>%
+  gg_season(Turnover_total, period = "year")
+```
+
+Observando o gráfico plotado, é possível identificar um padrão sazonal de aumento de vendas no mês de dezembro, representado pelo pico no gráfico. Além disso, após esse pico de vendas, há uma queda aparente em fevereiro, que se mostra mais acentuada nos anos mais recentes.
+
+Para uma melhor compreensão sobre a possível tendência de aumento de receita ao longo dos anos, podemos observar o gráfico de subplots abaixo:
+
+```{r}
+department_stores_group %>%
+  gg_subseries(Turnover_total)
+```
+
+Como podemos observar pelo gráfico discriminado por meses acima, a sazonalidade de aumento de vendas em dezembro está bem representada. Além disso, nota-se que, de maneira geral, houve um aparente aumento acentuado de receita em todos os meses entre os anos de 1990 e o início dos anos 2000, estabilizando-se nos anos seguintes.
+
+Para reforçar essas premissas, podemos analisar as funções de autocorrelação e autocorrelação parcial.
+
+```{r}
+# Gráfico de Autocorrelação
+department_stores_group %>%
+  ACF(Turnover_total, lag_max = 100) %>%
+  autoplot()
+```
+
+Como esperado, a função de autocorrelação revela fortes correlações entre os lags múltiplos de 12 (12, 24, 36\...) indicando a sazonalidade associada aos meses de dezembro. Além disso, é possível observar uma aparente tendência positiva, evidenciada pela significativa autocorrelação nos lags menores, que diminui gradualmente à medida que os lags aumentam.
+
+```{r}
+# Gráfico de Autocorrelação Parcial
+department_stores_group %>%
+  PACF(Turnover_total, lag_max = 100) %>%
+  autoplot()
+```
+
+Analisando o gráfico gerado pela PACF, percebemos um pico positivo seguido por um pico negativo, ambos muito acima das bandas do intervalo de confiança, nos lags 12 e 13. Isso indica uma forte sazonalidade neste período do ano, conforme observado nos gráficos anteriores.
+
+Ao que tudo indica, esta série temporal possui raiz unitária e não é estacionária. Para obtermos mais uma medida que confirme esta hipótese, podemos realizar o teste de raiz unitária de Dickey-Fuller abaixo:
+
+```{r}
+# Realizar o teste ADF
+turnover_vector <- department_stores_group %>% pull(Turnover_total)
+adf_result <- adf.test(turnover_vector, alternative = c("stationary", "explosive"))
+
+adf_result
+```
+
+O resultado do p-valor indica que devemos rejeitar a hipótese nula de que a série possui uma raiz unitária, o que sugere que há evidências estatísticas para afirmar que a série é estacionária. Portanto, a série demonstra sazonalidade, mas não possui uma tendência estocástica.
+
+### Questão 2
