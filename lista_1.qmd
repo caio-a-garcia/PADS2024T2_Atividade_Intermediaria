@@ -120,3 +120,26 @@ adf_result
 O resultado do p-valor indica que devemos rejeitar a hipótese nula de que a série possui uma raiz unitária, o que sugere que há evidências estatísticas para afirmar que a série é estacionária. Portanto, a série demonstra sazonalidade, mas não possui uma tendência estocástica.
 
 ### Questão 2
+
+**Use um método de decomposição estudado e explique os componentes, tendo
+em vista o aspecto da série. Existe sazonalidade? Qual periodicidade?**
+
+Aplicando método de decomposição dos componentes:
+
+```{r}
+department_stores_group %>%
+  model(
+    classical_decomposition(Turnover_total, type = "additive")
+  ) |>
+  components() |>
+  autoplot() +
+  labs(title = "Decomposição Série Departaments Stores")
+```
+
+Como podemos observar no gráfico de decomposição, existe um padrão sazonal de picos de venda no final de cada ano da série, fenômeno que já podia ser observado nos gráficos gerados anteriormente.
+
+Ao contrário do resultado do teste ADF realizado na questão anterior, a decomposição da série temporal sugere a presença de uma tendência positiva de aumento nas vendas ao longo dos anos, o que também pode ser observado nos gráficos ACF. Este fato indica que a série pode não ser completamente estacionária, possuindo uma tendência subjacente que não foi completamente capturada pelo teste ADF. Isso pode ser caracterizado como um caso de estacionaridade fraca, onde a tendência implica em uma diferença na média e variância que não foi considerada estatisticamente relevante pelo teste ADF.
+
+### Questão 3
+
+**Identifique um modelo SARIMA apropriado. Justifique o modelo escolhido através de critérios de informação e/ou usando a etapa de identificação da abordagem Box-Jenkins. Nesta etapa é possível utilizar um método automático de seleção das ordens do modelo.**
