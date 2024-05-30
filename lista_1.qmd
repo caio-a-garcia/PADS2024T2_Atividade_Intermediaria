@@ -111,13 +111,12 @@ Ao que tudo indica, esta série temporal possui raiz unitária e não é estacio
 
 ```{r}
 # Realizar o teste ADF
-turnover_vector <- department_stores_group %>% pull(Turnover_total)
-adf_result <- adf.test(turnover_vector, alternative = c("stationary", "explosive"))
+adf_result <- adf.test(department_stores_group$Turnover_total, alternative = "stationary")
 
 adf_result
 ```
 
-Como o p-valor é maior do que 0,05, não rejeitamos a hipótese nula $$H_0$$ indicando que a série temporal tem uma raiz unitária e, portanto, não é estacionária. Após este teste e observando os resultados da ACF e dos gráficos da série, chegamos à conclusão de que a série não é estacionária e possui uma tendência estocástica.
+Como o p-valor é menor do que 0.01
 
 ### Questão 2
 
