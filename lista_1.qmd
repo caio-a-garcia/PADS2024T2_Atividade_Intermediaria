@@ -117,12 +117,11 @@ adf_result <- adf.test(turnover_vector, alternative = c("stationary", "explosive
 adf_result
 ```
 
-O resultado do p-valor indica que devemos rejeitar a hipótese nula de que a série possui uma raiz unitária, o que sugere que há evidências estatísticas para afirmar que a série é estacionária. Portanto, a série demonstra sazonalidade, mas não possui uma tendência estocástica.
+Como o p-valor é maior do que 0,05, não rejeitamos a hipótese nula $$H_0$$ indicando que a série temporal tem uma raiz unitária e, portanto, não é estacionária. Após este teste e observando os resultados da ACF e dos gráficos da série, chegamos à conclusão de que a série não é estacionária e possui uma tendência estocástica.
 
 ### Questão 2
 
-**Use um método de decomposição estudado e explique os componentes, tendo
-em vista o aspecto da série. Existe sazonalidade? Qual periodicidade?**
+**Use um método de decomposição estudado e explique os componentes, tendo em vista o aspecto da série. Existe sazonalidade? Qual periodicidade?**
 
 Aplicando método de decomposição dos componentes:
 
@@ -143,3 +142,7 @@ Ao contrário do resultado do teste ADF realizado na questão anterior, a decomp
 ### Questão 3
 
 **Identifique um modelo SARIMA apropriado. Justifique o modelo escolhido através de critérios de informação e/ou usando a etapa de identificação da abordagem Box-Jenkins. Nesta etapa é possível utilizar um método automático de seleção das ordens do modelo.**
+
+```{r}
+write.csv(department_stores_group, "department_store.csv", row.names = FALSE)
+```
