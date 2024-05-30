@@ -13,6 +13,7 @@ Importando Pacotes utilizados neste documento.
 ```{r}
 library(fpp3)
 library(tseries)
+library(forecast)
 ```
 
 ## Importando Base de Dados
@@ -111,12 +112,10 @@ Ao que tudo indica, esta série temporal possui raiz unitária e não é estacio
 
 ```{r}
 # Realizar o teste ADF
-adf_result <- adf.test(department_stores_group$Turnover_total, alternative = "stationary")
+adf.test(department_stores_group$Turnover_total, alternative = c("stationary", "explosive"), k = trunc((length(department_stores_group$Turnover_total)-1)^(1/3)))
 
-adf_result
 ```
-
-Como o p-valor é menor do que 0.01
+O resultado do teste realizado, com p-valor menor do que o nível de 0,05, indica que não existem evidências significativas para rejeitar a hipótese nula de que a série não é estacionária. Este resultado contraria os resultados obtidos anteriormente pelos gráficos da série e pela função ACF. Um dos motivos para isso pode ser o fato de a série possuir uma tendência fraca que não foi capturada pelo teste ADF. Nesse caso, podemos dizer que a série possui uma fraca estacionariedade e não tem uma tendência estocástica evidente. Contudo, esses resultados podem estar sendo afetados pela forte sazonalidade que a série apresenta.
 
 ### Questão 2
 
@@ -136,12 +135,111 @@ department_stores_group %>%
 
 Como podemos observar no gráfico de decomposição, existe um padrão sazonal de picos de venda no final de cada ano da série, fenômeno que já podia ser observado nos gráficos gerados anteriormente.
 
-Ao contrário do resultado do teste ADF realizado na questão anterior, a decomposição da série temporal sugere a presença de uma tendência positiva de aumento nas vendas ao longo dos anos, o que também pode ser observado nos gráficos ACF. Este fato indica que a série pode não ser completamente estacionária, possuindo uma tendência subjacente que não foi completamente capturada pelo teste ADF. Isso pode ser caracterizado como um caso de estacionaridade fraca, onde a tendência implica em uma diferença na média e variância que não foi considerada estatisticamente relevante pelo teste ADF.
+Ao contrário do resultado do teste ADF realizado na questão anterior, a decomposição da série temporal sugere a presença de uma tendência positiva de aumento nas vendas ao longo dos anos, o que também pode ser observado nos gráficos ACF e Seasonal plots realizados anteriormente.
+
+Assim, podemos concluir que existe uma sazonalidade de 12 meses ao final de cada ano.
 
 ### Questão 3
 
 **Identifique um modelo SARIMA apropriado. Justifique o modelo escolhido através de critérios de informação e/ou usando a etapa de identificação da abordagem Box-Jenkins. Nesta etapa é possível utilizar um método automático de seleção das ordens do modelo.**
 
+Como foi observado anteriormente, existe uma sazonalidade anual na série. Por conta disso, iremos diferenciar a série, componente d, com base nesta sazonalidade anual para tornar a série ainda mais estacionária.
+
 ```{r}
-write.csv(department_stores_group, "department_store.csv", row.names = FALSE)
+# Aplicando diferenciação de 12 meses
+department_stores_diff <- diff(department_stores_group$Turnover_total, lag=12)
+
+# Plotar ACF
+acf(department_stores_diff, main="ACF da Série Diferenciada Anualmente")
+
 ```
+```{r}
+# Plotando PACf
+pacf(department_stores_diff, main="PACF da Série Diferenciada Anualmente")
+```
+
+Ao aplicar a diferenciação, percebe-se que os componentes de tendência e sazonalidade observados anteriormente foram reduzidos e que a série apresentou um resultado de ACF muito mais próximo de um padrão estacionário.
+
+Com isso, podemos rodas os modelos abaixo:
+
+```{r}
+# Definindo os dados
+y <- ts(department_stores_group$Turnover_total, frequency = 12) 
+
+# Definindo os parâmetros para testar
+orders <- list(c(1,1,0), c(1,1,1), c(0,1,0), c(0,1,1))
+seasonal_orders <- list(c(1,1,0), c(1,1,1), c(0,1,0))
+
+# Inicializando listas para armazenar os resultados
+models <- list()
+aic <- numeric()
+aicc <- numeric()
+bic <- numeric()
+
+# Loop para ajustar os modelos
+for (i in seq_along(orders)) {
+    for (j in seq_along(seasonal_orders)) {
+        model <- Arima(y, order = orders[[i]],
+                       seasonal = list(order = seasonal_orders[[j]], period = 12),
+                       method = "ML")
+        model_label <- paste("fit", i, j, sep="_")
+        models[[model_label]] <- model
+        aic <- c(aic, model$aic)
+        aicc <- c(aicc, model$aicc)
+        bic <- c(bic, model$bic)
+    }
+}
+
+# Criando uma tabela com os resultados
+results <- cbind(Model = names(models), AIC = aic, AICC = aicc, BIC = bic)
+results <- as.data.frame(results)
+
+
+# Mostrando a tabela de resultados
+print(results[order(results$AICC),]  )
+```
+
+De todos os modelos testados o que obteve melhor desempenho de acordo com a métrica AICC foi o modelo fit_2_2:
+
+```{r}
+best_model <- models[["fit_2_2"]]
+
+# Mostrando um resumo do modelo
+summary(best_model)
+```
+Ajustando o modelo otimizado:
+
+```{r}
+fit = Arima(y, order=c(1,1,1), seasonal=list(order=c(1,1,1), period=12), method="ML")
+```
+
+
+### Questão 4
+
+Faça a verificação de diagnóstico residual de seu modelo ARIMA. Os resíduos
+são ruído branco?
+
+Com o modelo otimizado ajustado, podemos realizar o diagnostico de desempenho.
+
+```{r}
+par(mfrow=c(1,2))
+acf(residuals(fit), 96, main="")
+pacf(residuals(fit), 96, main="")
+```
+Como pode ser observado, os residos apresentam caracteristicas de ruido branco.
+
+### Questão 5
+
+Use o modelo SARIMA de sua escolha para fazer previsões h (livre escolha)
+passos à frente.
+
+Realizando predição de 24 peridodos(2 anos) com o modelo otimizado.
+
+```{r}
+plot(forecast(fit, 24))
+```
+
+
+
+
+
