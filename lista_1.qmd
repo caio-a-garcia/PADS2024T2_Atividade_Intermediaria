@@ -14,6 +14,10 @@ Importando Pacotes utilizados neste documento.
 library(fpp3)
 library(tseries)
 library(forecast)
+library(prophet)
+library(xts)
+library(modeltime)
+library(tidymodels)
 ```
 
 ## Importando Base de Dados
@@ -34,7 +38,7 @@ department_stores_data <- aus_retail %>%
   filter(Industry == "Department stores")
 ```
 
-Estes dados referem-se a lojas de departamentos, que são grandes estabelecimentos de varejo que oferem uma ampra variedade de mercadorias em diferentes seções ou departamentos dentro da mesma loja.
+Estes dados referem-se a lojas de departamentos, que são grandes estabelecimentos de varejo que oferecem uma ampla variedade de mercadorias em diferentes seções ou departamentos dentro da mesma loja.
 
 ## Pre-Precessamento
 
@@ -97,7 +101,7 @@ department_stores_group %>%
   autoplot()
 ```
 
-Como esperado, a função de autocorrelação revela fortes correlações entre os lags múltiplos de 12 (12, 24, 36\...) indicando a sazonalidade associada aos meses de dezembro. Além disso, é possível observar uma aparente tendência positiva, evidenciada pela significativa autocorrelação nos lags menores, que diminui gradualmente à medida que os lags aumentam.
+Como esperado, a função de autocorrelação revela fortes correlações entre os lags múltiplos de 12 (12, 24, 36...) indicando a sazonalidade associada aos meses de dezembro. Além disso, é possível observar uma aparente tendência positiva, evidenciada pela significativa autocorrelação nos lags menores, que diminui gradualmente à medida que os lags aumentam.
 
 ```{r}
 # Gráfico de Autocorrelação Parcial
@@ -115,6 +119,7 @@ Ao que tudo indica, esta série temporal possui raiz unitária e não é estacio
 adf.test(department_stores_group$Turnover_total, alternative = c("stationary", "explosive"), k = trunc((length(department_stores_group$Turnover_total)-1)^(1/3)))
 
 ```
+
 O resultado do teste realizado, com p-valor menor do que o nível de 0,05, indica que não existem evidências significativas para rejeitar a hipótese nula de que a série não é estacionária. Este resultado contraria os resultados obtidos anteriormente pelos gráficos da série e pela função ACF. Um dos motivos para isso pode ser o fato de a série possuir uma tendência fraca que não foi capturada pelo teste ADF. Nesse caso, podemos dizer que a série possui uma fraca estacionariedade e não tem uma tendência estocástica evidente. Contudo, esses resultados podem estar sendo afetados pela forte sazonalidade que a série apresenta.
 
 ### Questão 2
@@ -153,6 +158,7 @@ department_stores_diff <- diff(department_stores_group$Turnover_total, lag=12)
 acf(department_stores_diff, main="ACF da Série Diferenciada Anualmente")
 
 ```
+
 ```{r}
 # Plotando PACf
 pacf(department_stores_diff, main="PACF da Série Diferenciada Anualmente")
@@ -207,17 +213,16 @@ best_model <- models[["fit_2_2"]]
 # Mostrando um resumo do modelo
 summary(best_model)
 ```
+
 Ajustando o modelo otimizado:
 
 ```{r}
 fit = Arima(y, order=c(1,1,1), seasonal=list(order=c(1,1,1), period=12), method="ML")
 ```
 
-
 ### Questão 4
 
-Faça a verificação de diagnóstico residual de seu modelo ARIMA. Os resíduos
-são ruído branco?
+**Faça a verificação de diagnóstico residual de seu modelo ARIMA. Os resíduos são ruído branco?**
 
 Com o modelo otimizado ajustado, podemos realizar o diagnostico de desempenho.
 
@@ -226,20 +231,175 @@ par(mfrow=c(1,2))
 acf(residuals(fit), 96, main="")
 pacf(residuals(fit), 96, main="")
 ```
-Como pode ser observado, os residos apresentam caracteristicas de ruido branco.
+
+Como pode ser observado, os resíduos apresentam caracteristicas de ruído branco.
 
 ### Questão 5
 
-Use o modelo SARIMA de sua escolha para fazer previsões h (livre escolha)
-passos à frente.
+**Use o modelo SARIMA de sua escolha para fazer previsões h (livre escolha) passos à frente.**
 
-Realizando predição de 24 peridodos(2 anos) com o modelo otimizado.
+Realizando predição de 24 períodos (2 anos) com o modelo otimizado.
 
 ```{r}
 plot(forecast(fit, 24))
 ```
 
+### Questão 6
+
+**Repita os passos acima ajustando um modelo que use o método do Prophet.**
+
+**Faça a previsão para o mesmo período e compare com o modelo SARIMA.**
+
+Rodando o Prophet com sazonalidade multiplicativa:
+
+```{r}
+df <- data.frame(ds = zoo::index(as.xts(y)),y = coredata(as.xts(y)))
+m <- prophet(df, seasonality.mode = "multiplicative") 
+future <- make_future_dataframe(m, 24, freq = 'm')
+forecast <- predict(m, future)
+plot(m, forecast)
+```
+
+Comparando SARIMA e Prophet no dataset inteiro:
+
+```{r}
+sarima_model <- fit
+forecast_sarima <- forecast(fit, 24)
+prophet_model <- m
+forecast_prophet <- forecast
 
 
+# Combine forecasts for comparison
+combined_forecast <- data.frame(
+  ds = future$ds,
+  actual = c(y, rep(NA, 24)), # Adjust length based on your data
+  sarima = c(fitted(sarima_model), forecast_sarima$mean),
+  prophet = forecast_prophet$yhat
+)
+
+# Plot combined forecasts
+ggplot(combined_forecast, aes(x = ds)) +
+  geom_line(aes(y = actual, color = "Actual")) +
+  geom_line(aes(y = sarima, color = "SARIMA")) +
+  geom_line(aes(y = prophet, color = "Prophet")) +
+  ggtitle("Comparison of SARIMA and Prophet Forecasts") +
+  labs(y = "Values", color = "Legend")
+
+```
+
+Comparando SARIMA e Prophet fazendo o split treino-teste:
+
+```{r}
+dados <- data.frame(date=as.Date(zoo::index(as.xts(y))), value=coredata(as.xts(y)))
+
+split_forecast <- timetk::time_series_split(
+  dados,
+  date_var = date,
+  initial = "410 months",
+  assess = "24 months"
+)
+```
+
+```{r}
+split_forecast |>
+  timetk::tk_time_series_cv_plan() |>
+  timetk::plot_time_series_cv_plan(date, value)
+```
+
+```{r}
+model_sarima <- arima_reg(
+        seasonal_period          = 12,
+        non_seasonal_ar          = 1,
+        non_seasonal_differences = 1,
+        non_seasonal_ma          = 1,
+        seasonal_ar              = 1,
+        seasonal_differences     = 1,
+        seasonal_ma              = 1
+    ) |>
+  set_engine("arima") |>
+  fit(value ~ date, training(split_forecast))
 
 
+model_prophet <- prophet_reg(seasonality_yearly = TRUE) |>
+  set_engine("prophet") |>
+  fit(value ~ date, training(split_forecast))
+
+
+mtable <- modeltime_table(
+  model_sarima,
+  model_prophet
+)
+
+dados_para_teste <- modeltime_calibrate(
+  mtable,
+  testing(split_forecast)
+)
+
+dados_para_teste |>
+  modeltime_accuracy() |>
+  table_modeltime_accuracy(.interactive = FALSE)
+```
+
+O SARIMA apresenta resultados melhores.
+
+### Questão 7
+
+**Faça um backtest e verifique qual modelo tem melhor poder preditivo (calcule medidas de performance que sejam comparáveis entre os dois modelos usando diferentes janelas de tempo). Nesta etapa você pode usar apenas um split treino/teste temporal ou vários (cross-validation). Justifique qual dos modelos você usaria.**
+
+Vamos começar divindo em 10 splits:
+
+```{r}
+splits <- timetk::time_series_cv(
+  dados,
+  date_var = date,
+  initial = "60 months",
+  assess = "24 months",
+  skip = 12,
+  slice_limit = 10,
+  cumulative = FALSE
+)
+
+splits
+```
+
+Verificando se os splits foram feitos corretamente:
+
+```{r}
+#| fig-height: 15
+#| fig-width: 7
+splits |>
+  timetk::tk_time_series_cv_plan() |>
+  timetk::plot_time_series_cv_plan(date, value)
+```
+
+Fit dos modelos nos 10 splits:
+
+```{r}
+resamples <- mtable |>
+  modeltime.resample::modeltime_fit_resamples(
+    resamples = splits
+  )
+```
+
+Comparar resultado de cada split:
+
+```{r}
+resamples |>
+  modeltime.resample::plot_modeltime_resamples(
+    .point_size  = 3,
+    .point_alpha = 0.8,
+    .interactive = FALSE
+  )
+```
+
+Comparar resultado do SARIMA x Prophet:
+
+```{r}
+resamples |>
+  modeltime.resample::modeltime_resample_accuracy(summary_fns = mean) |>
+  table_modeltime_accuracy(.interactive = FALSE)
+```
+
+Apesar do cross-validation ter piorado o resultado do SARIMA, ele continua melhor que o resultado do Prophet.
+
+O modelo escolhido é o SARIMA.
